@@ -521,6 +521,14 @@ const PHOTO_PALETTE={"colors": [[0.9368, 0.0338, 0.1393], [1.0, 0.0448, 0.1597],
   gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
   var mouse=[.5,.5],tmouse=[.5,.5];
   addEventListener('mousemove',function(e){tmouse=[e.clientX/innerWidth,1-e.clientY/innerHeight];});
+  // touch: feed the same attraction target so the flock follows a finger on mobile.
+  // passive (no preventDefault) so the page still scrolls while the polygons react;
+  // on lift, relax the target back to centre so they drift home (no resting cursor on touch).
+  function _touch(e){var t=e.touches&&e.touches[0];if(t)tmouse=[t.clientX/innerWidth,1-t.clientY/innerHeight];}
+  addEventListener('touchstart',_touch,{passive:true});
+  addEventListener('touchmove',_touch,{passive:true});
+  addEventListener('touchend',function(){tmouse=[.5,.5];},{passive:true});
+  addEventListener('touchcancel',function(){tmouse=[.5,.5];},{passive:true});
   var renderScale=1.0, _lastW=0, _lastH=0;
   function resize(){
     // mobile: allow a higher DPR cap so the polygons stay crisp on high-density phone
