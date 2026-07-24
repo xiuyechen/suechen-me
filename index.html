@@ -144,7 +144,9 @@ header.hero{position:relative;z-index:2;min-height:100svh;display:flex;flex-dire
   .hero-copy{order:1}
   .hero .roles{order:2}
   .hero-portrait{order:3;width:min(72vw,300px);margin:22px auto 0;align-self:center;transform:none}
-  .scrollcue{display:none}}
+  /* scrollcue mobile-hide moved AFTER the base .scrollcue rule (below) — the base
+     rule sets display:flex and comes later in source order, so hiding it here would
+     be overridden. See the @media block after the .scrollcue definition. */}
 header.hero::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
   background:linear-gradient(to top,rgba(26,21,30,.82)0%,rgba(26,21,30,.5)22%,rgba(26,21,30,.08)46%,transparent 62%),
   radial-gradient(120% 80% at 18% 100%,rgba(26,21,30,.55),transparent 60%)}
@@ -169,6 +171,8 @@ header.hero::before{content:"";position:absolute;inset:0;z-index:-1;pointer-even
 .scrollcue{position:absolute;left:clamp(20px,5vw,64px);bottom:20px;font-family:'Newsreader',serif;
   font-size:13px;letter-spacing:.22em;text-transform:uppercase;color:var(--hero-text);opacity:.8;
   text-shadow:0 1px 10px rgba(0,0,0,.5);display:flex;align-items:center;gap:10px}
+/* hide the scroll cue on mobile — placed AFTER the base rule so it wins on source order */
+@media(max-width:720px){.scrollcue{display:none}}
 .scrollcue .ln{display:inline-block;width:44px;height:1px;background:var(--hero-text);opacity:.7;
   transform-origin:left;animation:cue 2.6s ease-in-out infinite}
 @keyframes cue{0%,100%{transform:scaleX(.4);opacity:.4}50%{transform:scaleX(1);opacity:.9}}
