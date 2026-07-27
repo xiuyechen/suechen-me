@@ -373,6 +373,24 @@ const PHOTO_PALETTE={"colors": [[0.9368, 0.0338, 0.1393], [1.0, 0.0448, 0.1597],
 
 <script>
 (function(){
+  // ---- global catch-all: if an unexpected JS error breaks the page, reload ONCE ----
+  // Scoped + loop-guarded: reload at most once per 15s (sessionStorage), so a deterministic
+  // error can't thrash reloads. Only catches thrown exceptions / rejected promises — a page
+  // that "looks wrong" without throwing (e.g. a frozen WebGL canvas) is handled by the
+  // context-loss recovery below, not here. Decorative homepage → auto-reload is acceptable.
+  (function(){
+    function recover(tag){
+      try{
+        var now=Date.now(), last=+(sessionStorage.getItem('pageReload')||0);
+        if(now-last>15000){sessionStorage.setItem('pageReload',now);
+          if(window.visualViewport)try{/* reset zoom before reload so we don't re-break */}catch(_){}
+          location.reload();}
+      }catch(_){}
+    }
+    addEventListener('error',function(e){ if(e && e.message) recover('error'); });
+    addEventListener('unhandledrejection',function(){ recover('promise'); });
+  })();
+
   // ---- mobile nav drawer ----
   var navEl=document.querySelector('nav'), tgl=document.getElementById('navtoggle'),
       menu=document.getElementById('navmenu');
@@ -531,9 +549,13 @@ const PHOTO_PALETTE={"colors": [[0.9368, 0.0338, 0.1393], [1.0, 0.0448, 0.1597],
   addEventListener('touchcancel',function(){tmouse=[.5,.5];},{passive:true});
   var renderScale=1.0, _lastW=0, _lastH=0;
   function resize(){
-    // mobile: allow a higher DPR cap so the polygons stay crisp on high-density phone
-    // screens (COUNT is cut on mobile to keep the frame budget — see below).
-    var cap=innerWidth<=720?2.5:2;
+    // DON'T resize the backbuffer while a pinch-zoom is active: pinch inflates
+    // devicePixelRatio and fires resize storms, which realloc the GL buffer every frame
+    // and can blow past the mobile GL limit → context loss → visible break. The hero is
+    // decorative; leave its buffer alone during the gesture (visualViewport.scale>1).
+    if(window.visualViewport && window.visualViewport.scale>1.01) return;
+    // mobile DPR capped at 2 (was 2.5 — too aggressive; 2 is plenty crisp and safer).
+    var cap=innerWidth<=720?2:2;
     var d=Math.min(devicePixelRatio||1,cap)*renderScale;
     var w=Math.max(2,Math.floor(innerWidth*d)), h=Math.max(2,Math.floor(innerHeight*d));
     // CRASH GUARD: pinch-zoom on mobile fires resize repeatedly and inflates devicePixelRatio,
@@ -549,8 +571,15 @@ const PHOTO_PALETTE={"colors": [[0.9368, 0.0338, 0.1393], [1.0, 0.0448, 0.1597],
   // WebGL context loss recovery (e.g. from a zoom spike or GPU reset): show the CSS fallback
   // instead of a blank/frozen canvas, and re-init cleanly if the context comes back.
   cv.addEventListener('webglcontextlost',function(e){e.preventDefault();
-    document.getElementById('flockFallback').style.display='block';},false);
-  cv.addEventListener('webglcontextrestored',function(){location.reload();},false);
+    // show the CSS fallback AND hide the now-dead canvas, so the fallback is actually
+    // visible instead of sitting behind a frozen black canvas.
+    document.getElementById('flockFallback').style.display='block';cv.style.display='none';},false);
+  cv.addEventListener('webglcontextrestored',function(){
+    // reload to cleanly re-init the GL scene, but guard against a reload LOOP: if a zoom
+    // spike keeps losing the context, reloading at the same zoom just re-breaks. Reload at
+    // most once per 10s; after that, stay on the CSS fallback instead of thrashing.
+    var now=Date.now(),last=+(sessionStorage.getItem('flockReload')||0);
+    if(now-last>10000){sessionStorage.setItem('flockReload',now);location.reload();}},false);
   resize();
   var reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches;
   var visible=true;
