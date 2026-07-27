@@ -93,6 +93,12 @@ nav a:hover::after,nav a:focus-visible::after{transform:scaleX(1)}
 /* hero */
 header.hero{position:relative;z-index:2;min-height:100svh;display:flex;flex-direction:column;
   justify-content:flex-end;padding:0 clamp(20px,5vw,64px) clamp(76px,11vh,128px);
+  /* pinch-zooming while the live WebGL flock is in view corrupts its canvas on mobile
+     Safari (position:fixed canvas + pinch compositing is a known-bad combo) — it only
+     breaks here, not once you've scrolled past. touch-action:pan-y keeps vertical scroll
+     but tells the browser not to hand this region a pinch gesture, so zoom still works
+     everywhere else on the page (e.g. reading the CV further down). */
+  touch-action:pan-y;
   /* clip the portrait's parallax/drift transform at the hero so it can never push a
      horizontal scrollbar on wide screens (belt-and-suspenders with body overflow-x:hidden) */
   overflow-x:clip}
