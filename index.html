@@ -443,7 +443,15 @@ const PHOTO_PALETTE={"colors": [[0.9368, 0.0338, 0.1393], [1.0, 0.0448, 0.1597],
     addEventListener('mousemove',function(e){
       tx=(e.clientX/innerWidth-0.5); ty=(e.clientY/innerHeight-0.5);
     },{passive:true});
-    (function ease(){
+    var easeRunning=false;
+    window.__resumeEase=function(){
+      // called from the IntersectionObserver / visibilitychange handlers further down this
+      // closure to restart the loop after it self-paused (see the gate at the bottom of
+      // `ease`, below) — the recursive RAF chain is dead once it declines to reschedule,
+      // so resuming means kicking off a fresh chain, guarded against double-starting it.
+      if(!easeRunning && !reduceP){easeRunning=true;ease();}
+    };
+    function ease(){
       px+=(tx-px)*0.06; py+=(ty-py)*0.06; tt+=0.016;
       // spontaneous slow float, independent of mouse (different phase per layer/axis).
       // amplitudes trimmed so peak horizontal travel can't push the portrait past the
@@ -464,8 +472,16 @@ const PHOTO_PALETTE={"colors": [[0.9368, 0.0338, 0.1393], [1.0, 0.0448, 0.1597],
         if(h1)h1.style.transform='';
         if(roles)roles.style.transform='';
       }
-      requestAnimationFrame(ease);
-    })();
+      // This loop had NO visibility gating at all — unlike the flock below, it ran
+      // forever regardless of scroll position or tab focus, which was a real source of
+      // needless CPU/battery use. Reuse the same two signals as the flock: pause once the
+      // hero scrolls mostly out of view (`visible`, set by the IntersectionObserver further
+      // down this closure) or the tab is backgrounded (document.hidden).
+      if(visible!==false && !document.hidden){requestAnimationFrame(ease);}
+      else{easeRunning=false;}
+    }
+    easeRunning=true;
+    ease();
   }
 
   // ---------- FLOCK ----------
@@ -611,9 +627,21 @@ const PHOTO_PALETTE={"colors": [[0.9368, 0.0338, 0.1393], [1.0, 0.0448, 0.1597],
   // gone once its bottom passes ~40% up the viewport", i.e. by the time About fills the
   // screen the loop is stopped and there's no live canvas left to crash on a pinch.
   var io=('IntersectionObserver'in window)?new IntersectionObserver(function(es){
-    visible=es[0].isIntersecting; if(visible&&!reduce)requestAnimationFrame(frame);},
+    visible=es[0].isIntersecting;
+    if(visible&&!reduce&&!document.hidden)requestAnimationFrame(frame);
+    if(visible&&window.__resumeEase)window.__resumeEase();},
     {threshold:0, rootMargin:'-40% 0px -40% 0px'}):null;
   if(io)io.observe(document.querySelector('header.hero'));
+  // Second, independent gate: scroll-visibility (above) only knows whether the hero is in
+  // the viewport WITHIN the page. It has no idea if the tab itself is backgrounded,
+  // minimized, or the OS switched away — a tab scrolled to the hero but sitting unfocused
+  // in the background still passed the IntersectionObserver check and kept rendering.
+  // The Page Visibility API (document.hidden / visibilitychange) is the actual "is anyone
+  // looking at this" signal; gate the loop on both so it truly pauses when not displayed.
+  document.addEventListener('visibilitychange',function(){
+    if(!document.hidden&&visible&&!reduce)requestAnimationFrame(frame);
+    if(!document.hidden&&window.__resumeEase)window.__resumeEase();
+  });
   var start=null,last=0,ema=16,adapted=false;
   function heroRGB(){var s=getComputedStyle(document.documentElement).getPropertyValue('--hero-ground').trim();
     var m=s.match(/#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i);
@@ -629,7 +657,7 @@ const PHOTO_PALETTE={"colors": [[0.9368, 0.0338, 0.1393], [1.0, 0.0448, 0.1597],
     mouse[0]+=(tmouse[0]-mouse[0])*0.05;mouse[1]+=(tmouse[1]-mouse[1])*0.05;
     draw(t);
     if(!adapted&&ts-start>1200&&ema>28&&renderScale>0.75){renderScale=Math.max(0.75,renderScale*0.85);resize();if(ts-start>3000)adapted=true;}
-    if(!reduce&&visible)requestAnimationFrame(frame);}
+    if(!reduce&&visible&&!document.hidden)requestAnimationFrame(frame);}
   requestAnimationFrame(frame);
   if(reduce){resize();draw(6.0);}
 })();
